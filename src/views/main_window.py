@@ -1,5 +1,10 @@
 # Khung giao diện chính (Gồm Sidebar menu bên trái + Vùng hiển thị nội dung)
 import customtkinter as ctk
+from src.views.page_pos import PagePOS
+from src.views.page_menu import PageMenu
+from src.views.page_stock import PageStock
+from src.views.page_report import PageReport
+from src.views.page_data import PageData
 
 class MainWindow(ctk.CTk):
     def __init__(self):
@@ -41,21 +46,40 @@ class MainWindow(ctk.CTk):
         self.content_frame = ctk.CTkFrame(self, corner_radius=10)
         self.content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
 
-        self.status_label = ctk.CTkLabel(self.content_frame, text="Chào mừng bạn đến với hệ thống quản lý!", font=ctk.CTkFont(size=16))
-        self.status_label.pack(expand=True)
+        # Khởi tạo các trang giao diện (hiện tại mới có trang POS)
+        self.page_pos = PagePOS(self.content_frame)
+        self.page_menu = PageMenu(self.content_frame)
+        self.page_stock = PageStock(self.content_frame)
+        self.page_report = PageReport(self.content_frame)
+        self.page_data = PageData(self.content_frame)
 
-    # --- CÁC HÀM XỬ LÝ CHUYỂN TRANG (Tạm thời thay đổi chữ hiển thị) ---
-    def show_pos(self):
-        self.status_label.configure(text="Đây là không gian hiển thị Sơ đồ bàn & Bán hàng (Trang 1)")
+        # Mặc định khi mở app sẽ hiển thị trang Bán hàng (POS)
+        self.show_pos()
 
-    def show_menu(self):
-        self.status_label.configure(text="Đây là không gian quản lý Menu đồ uống (Trang 2)")
+    # --- HÀM XỬ LÝ CHUYỂN TRANG ---
+    def clear_content(self):
+        """Hàm dùng để xóa giao diện trang cũ trước khi tải trang mới lên"""
+        for widget in self.content_frame.winfo_children():
+            widget.pack_forget()
+
+    def show_pos(self): # trang 1: Trang đặt bàn
+        self.clear_content() # Xóa trang cũ đi
+        self.page_pos.pack(fill="both", expand=True) # Hiện trang POS lên
+        
+    def show_menu(self): # trang 2: menu
+        self.clear_content()
+        self.page_menu.refresh_menu_list() # Lấy dữ liệu mới nhất từ DB
+        self.page_menu.pack(fill="both", expand=True)
 
     def show_stock(self):
-        self.status_label.configure(text="Đây là không gian Quản lý Kho & Kiểm kho hao hụt (Trang 3)")
+        self.clear_content()
+        self.page_stock.refresh_stock_list()
+        self.page_stock.pack(fill="both", expand=True)
 
     def show_report(self):
-        self.status_label.configure(text="Đây là không gian xem Biểu đồ & Doanh thu lãi lỗ (Trang 4)")
+        self.clear_content()
+        self.page_report.pack(fill="both", expand=True)
 
     def show_data(self):
-        self.status_label.configure(text="Đây là cấu hình dán link Google Drive Auto-Backup (Trang 5)")
+        self.clear_content()
+        self.page_data.pack(fill="both", expand=True)
