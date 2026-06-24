@@ -1,0 +1,30 @@
+# 1. Thư mục môi trường ảo (Nặng và không cần đẩy lên GitHub)
+venv/
+.venv/
+env/
+ENV/
+
+# 2. Các file cache tự sinh của Python khi chạy code
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 3. Thư mục cấu hình riêng của VS Code (Mỗi máy mỗi khác, không nên đẩy lên)
+.vscode/
+.history/
+*.code-workspace
+
+# 4. File Cơ sở dữ liệu và file tạm (Để tránh lộ dữ liệu của quán lên GitHub)
+*.db
+*.sqlite
+*.sqlite3
+
+# 5. File cấu hình môi trường chứa token bảo mật (Nếu sau này có dùng)
+.env
+local_config.py
+
+# 6. Các file rác của hệ điều hành Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini

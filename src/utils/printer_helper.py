@@ -1,0 +1,1 @@
+# Tạo file hóa đơn text hoặc kết nối lệnh in ra máy in nhiệt

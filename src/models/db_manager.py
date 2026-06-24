@@ -1,0 +1,1 @@
+# Quản lý kết nối, đóng/mở và thực thi câu lệnh SQL chung

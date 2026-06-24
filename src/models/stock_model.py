@@ -1,0 +1,1 @@
+# Truy vấn nhập kho, tính tồn lý thuyết, lưu lịch sử kiểm kho
