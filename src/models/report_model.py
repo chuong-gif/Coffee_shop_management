@@ -11,6 +11,7 @@ class ReportModel:
     def get_sales_summary(self, start_date, end_date):
         conn = self._connect()
         cursor = conn.cursor()
+        
         cursor.execute(
             "SELECT COALESCE(SUM(tong_tien), 0), COALESCE(COUNT(*), 0) "
             "FROM don_hang "
@@ -46,10 +47,11 @@ class ReportModel:
         }
 
     def get_top_selling_items(self, start_date, end_date, limit=5):
+        """Lấy Top 5 món: Tên món, Tổng ly bán ra, Tổng doanh thu mang lại"""
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT d.ten_mon, SUM(c.so_luong) AS total_sold "
+            "SELECT d.ten_mon, SUM(c.so_luong) AS total_sold, SUM(c.so_luong * c.don_gia) AS total_revenue "
             "FROM chi_tiet_don_hang c "
             "JOIN do_uong d ON c.do_uong_id = d.id "
             "WHERE c.don_hang_id IN ("
@@ -63,3 +65,18 @@ class ReportModel:
         items = cursor.fetchall()
         conn.close()
         return items
+
+    def get_revenue_by_date(self, start_date, end_date):
+        """Lấy doanh thu gộp theo từng ngày để vẽ biểu đồ"""
+        conn = self._connect()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT date(thoi_gian_thanh_toan) AS ngay, SUM(tong_tien) "
+            "FROM don_hang "
+            "WHERE trang_thai = 'Đã Thanh Toán' AND date(thoi_gian_thanh_toan) BETWEEN ? AND ? "
+            "GROUP BY ngay ORDER BY ngay",
+            (start_date, end_date)
+        )
+        data = cursor.fetchall()
+        conn.close()
+        return data
