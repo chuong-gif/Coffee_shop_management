@@ -10,23 +10,32 @@ class StockController:
     def get_stock_history(self, limit=20):
         return self.model.get_inventory_history(limit)
 
-    def add_item(self, name, quantity, unit, cost, note):
+    def add_item(self, name, unit, warn_level_str, quantity_str, cost_str):
         if not name or not unit:
             return False, "Tên và đơn vị không được để trống"
         try:
-            qty = float(quantity) if quantity else 0.0
-            if qty < 0:
-                return False, "Số lượng không được âm"
+            warn = float(warn_level_str) if warn_level_str else 0.0
+            qty = float(quantity_str) if quantity_str else 0.0
+            cost = float(cost_str) if cost_str else 0.0
+            if qty < 0 or cost < 0 or warn < 0:
+                return False, "Các chỉ số không được âm"
+            self.model.add_ingredient(name, unit, warn, qty, cost)
+            return True, "Thành công"
         except ValueError:
-            return False, "Số lượng phải là số hợp lệ"
+            return False, "Vui lòng nhập số hợp lệ"
+
+    def update_item(self, ing_id, name, unit, warn_level_str):
+        if not name or not unit:
+            return False, "Tên và đơn vị không được để trống"
         try:
-            gia = float(cost) if cost else 0.0
-            if gia < 0:
-                return False, "Giá vốn không được âm"
+            warn = float(warn_level_str) if warn_level_str else 0.0
+            self.model.update_ingredient(ing_id, name, unit, warn)
+            return True, "Cập nhật thành công"
         except ValueError:
-            return False, "Giá vốn phải là số hợp lệ"
-        self.model.add_ingredient(name, unit, qty, gia, note)
-        return True, "Thành công"
+            return False, "Mức cảnh báo phải là số"
+
+    def delete_item(self, ing_id):
+        self.model.delete_ingredient(ing_id)
 
     def sync_stock(self, ing_id, old_stock, new_stock_str, reason):
         try:

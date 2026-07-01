@@ -86,3 +86,6 @@ CREATE TABLE IF NOT EXISTS cong_thuc (
     FOREIGN KEY(do_uong_id) REFERENCES do_uong(id),
     FOREIGN KEY(nguyen_lieu_id) REFERENCES kho_nguyen_lieu(id)
 );
+
+CREATE INDEX idx_don_hang_thoi_gian ON don_hang(thoi_gian_thanh_toan);
+CREATE INDEX idx_don_hang_trang_thai ON don_hang(trang_thai);

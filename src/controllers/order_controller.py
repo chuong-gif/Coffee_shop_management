@@ -33,6 +33,12 @@ class OrderController:
     def delete_table(self, table_id):
         self.table_model.delete_table(table_id)
 
+    def rename_table(self, table_id, new_name):
+        if new_name.strip() != "":
+            self.table_model.update_table_name(table_id, new_name.strip())
+            return True
+        return False
+
     def handle_table_click(self, table_id, ten_ban):
         order = self.order_model.get_open_order_by_table(table_id)
         order_id = order[0] if order else None
@@ -40,6 +46,22 @@ class OrderController:
         return {
             "table_id": table_id,
             "ten_ban": ten_ban,
+            "order_id": order_id,
+            "order_items": self.order_model.get_order_items(order_id) if order_id else [],
+            "order_total": self.order_model.calculate_order_total(order_id) if order_id else 0,
+            "order_note": note,
+            "menu": self.menu_model.get_available_menu(),
+        }
+
+    # [FIX #1]: Chỉ TÌM đơn Mang Về đang mở (nếu có), KHÔNG tạo mới ngay.
+    # Đơn thật sự chỉ được tạo trong create_takeaway_order() khi món đầu tiên được thêm.
+    def get_takeaway_pane_data(self):
+        order = self.order_model.get_open_order_by_table(None)
+        order_id = order[0] if order else None
+        note = self.order_model.get_order_note_by_order_id(order_id) if order_id else None
+        return {
+            "table_id": None,
+            "ten_ban": "Đơn Mang Về",
             "order_id": order_id,
             "order_items": self.order_model.get_order_items(order_id) if order_id else [],
             "order_total": self.order_model.calculate_order_total(order_id) if order_id else 0,
@@ -79,18 +101,44 @@ class OrderController:
     def save_order_note(self, order_id, ghi_chu):
         self.order_model.update_order_note(order_id, ghi_chu)
 
-    def move_order_to_table(self, source_table_id, target_table_name):
+    # [FIX CỐT LÕI]: Truyền trực tiếp order_id xuống để khỏi phải tìm kiếm mông lung
+    def move_order_to_table(self, order_id, source_table_id, target_table_name):
         target_table = self.table_model.get_table_by_name(target_table_name)
         if not target_table:
             return False, "Không tìm thấy bàn đích.", None
+        
         target_table_id = target_table[0]
         if source_table_id == target_table_id:
             return False, "Bàn nguồn và bàn đích trùng nhau.", None
 
-        new_order_id = self.order_model.move_order(source_table_id, target_table_id)
+        new_order_id = self.order_model.move_order(order_id, source_table_id, target_table_id)
         if new_order_id:
             return True, "Chuyển bàn/thực hiện gộp đơn thành công.", new_order_id
-        return False, "Không chuyển được đơn hàng.", None
+        return False, "Lỗi cơ sở dữ liệu khi chuyển đơn.", None
 
     def close_order(self, order_id, tien_khach_dua):
         return self.order_model.close_order(order_id, tien_khach_dua)
+        
+    def update_item_qty(self, item_id, new_qty):
+        if new_qty <= 0:
+            self.order_model.remove_order_item(item_id)
+        else:
+            self.order_model.update_item_quantity(item_id, new_qty)
+
+    def update_item_note(self, item_id, note):
+        self.order_model.update_item_note(item_id, note)
+
+    def cancel_order(self, order_id, table_id):
+        self.order_model.cancel_order(order_id, table_id)
+
+    # === BỔ SUNG CHO TÍNH NĂNG CÔNG THỨC TÙY CHỈNH ===
+    def get_ingredients(self):
+        return self.menu_model.get_ingredients()
+
+    def get_drink_base_recipe(self, do_uong_id):
+        return self.menu_model.get_recipe_by_drink_id(do_uong_id)
+
+    def save_custom_recipe(self, item_id, recipe_dict):
+        import json
+        recipe_str = json.dumps(recipe_dict) if recipe_dict else None
+        self.order_model.update_custom_recipe(item_id, recipe_str)

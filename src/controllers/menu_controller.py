@@ -26,11 +26,12 @@ class MenuController:
         self.model.add_drink(ten_mon, phan_loai, int(gia_ban), hinh_anh, recipe_data)
         return True
 
-    def update_item(self, drink_id, ten_mon, phan_loai, gia_ban, hinh_anh=None, recipe_data=None):
+    # [FIX CỐT LÕI]: Đã thêm con_hang vào để dữ liệu không bị từ chối khi Sửa
+    def update_item(self, drink_id, ten_mon, phan_loai, gia_ban, hinh_anh=None, con_hang=1, recipe_data=None):
         if not ten_mon or not phan_loai or not str(gia_ban).isdigit():
             return False
         self.model.add_category_if_missing(phan_loai)
-        self.model.update_drink(drink_id, ten_mon, phan_loai, int(gia_ban), hinh_anh, recipe_data=recipe_data)
+        self.model.update_drink(drink_id, ten_mon, phan_loai, int(gia_ban), hinh_anh, con_hang, recipe=recipe_data)
         return True
 
     def delete_item(self, drink_id):

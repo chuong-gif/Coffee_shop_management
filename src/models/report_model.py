@@ -30,34 +30,34 @@ class ReportModel:
         )
         total_items = cursor.fetchone()[0]
 
+        # [TÍNH NĂNG MỚI]: Tính tổng chi phí dòng tiền nhập hàng (Thay vì tính hao hụt)
         cursor.execute(
-            "SELECT COALESCE(SUM(ABS(l.so_luong_lech) * COALESCE(k.gia_von, 0)), 0) "
-            "FROM lich_su_kiem_kho l "
-            "LEFT JOIN kho_nguyen_lieu k ON l.nguyen_lieu_id = k.id "
-            "WHERE date(l.thoi_gian_kiem_kho) BETWEEN ? AND ?",
+            "SELECT COALESCE(SUM(chi_phi), 0) "
+            "FROM lich_su_kiem_kho "
+            "WHERE date(thoi_gian_kiem_kho) BETWEEN ? AND ?",
             (start_date, end_date),
         )
-        total_loss = cursor.fetchone()[0]
+        total_restock_cost = cursor.fetchone()[0]
+        
         conn.close()
         return {
             "total_revenue": total_revenue,
             "total_orders": total_orders,
             "total_items": total_items,
-            "total_loss": total_loss,
+            "total_restock_cost": total_restock_cost,
         }
 
     def get_top_selling_items(self, start_date, end_date, limit=5):
-        """Lấy Top 5 món: Tên món, Tổng ly bán ra, Tổng doanh thu mang lại"""
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT d.ten_mon, SUM(c.so_luong) AS total_sold, SUM(c.so_luong * c.don_gia) AS total_revenue "
+            "SELECT d.id, d.ten_mon, d.phan_loai, d.hinh_anh, SUM(c.so_luong) AS total_sold, SUM(c.so_luong * c.don_gia) AS total_revenue "
             "FROM chi_tiet_don_hang c "
             "JOIN do_uong d ON c.do_uong_id = d.id "
             "WHERE c.don_hang_id IN ("
             "SELECT id FROM don_hang WHERE trang_thai = 'Đã Thanh Toán' AND date(thoi_gian_thanh_toan) BETWEEN ? AND ?"
             ") "
-            "GROUP BY d.ten_mon "
+            "GROUP BY d.id, d.ten_mon, d.phan_loai, d.hinh_anh "
             "ORDER BY total_sold DESC "
             "LIMIT ?",
             (start_date, end_date, limit),
@@ -67,7 +67,6 @@ class ReportModel:
         return items
 
     def get_revenue_by_date(self, start_date, end_date):
-        """Lấy doanh thu gộp theo từng ngày để vẽ biểu đồ"""
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(

@@ -1,6 +1,6 @@
 # Khung giao diện chính (Gồm Sidebar menu bên trái + Vùng hiển thị nội dung)
 import customtkinter as ctk
-from src.views.page_pos import PagePOS
+from src.views.pos.page_pos_main import PagePOS
 from src.views.page_menu import PageMenu
 from src.views.page_stock import PageStock
 from src.views.page_report import PageReport
