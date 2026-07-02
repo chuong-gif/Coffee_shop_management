@@ -22,17 +22,18 @@ class PageReport(ctk.CTkFrame):
 
         self.top_n = 5 
 
-        # Thiết lập Master Grid
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=0) 
-        self.grid_rowconfigure(1, weight=0) 
-        self.grid_rowconfigure(2, weight=1) 
+        # Thiết lập Master Grid: 4 cột bằng nhau (khớp với 4 thẻ KPI hàng 1)
+        self.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="maincol")
+        self.grid_rowconfigure(0, weight=0)   # Bộ lọc thời gian
+        self.grid_rowconfigure(1, weight=0)   # Hàng KPI 1 (4 thẻ)
+        self.grid_rowconfigure(2, weight=0)   # Hàng KPI 2 (3 thẻ) + đỉnh thẻ Top món
+        self.grid_rowconfigure(3, weight=1)   # Biểu đồ + phần còn lại của Top món
 
         # ==========================================
         # 1. BỘ LỌC THỜI GIAN (TOP BAR)
         # ==========================================
         self.filter_card = ctk.CTkFrame(self, fg_color=self.card_bg, corner_radius=8, border_width=1, border_color=self.border_color)
-        self.filter_card.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
+        self.filter_card.grid(row=0, column=0, columnspan=4, sticky="ew", padx=20, pady=(20, 10))
         self.filter_card.grid_columnconfigure(0, weight=1)
         self.filter_card.grid_columnconfigure(1, weight=0)
 
@@ -77,31 +78,26 @@ class PageReport(ctk.CTkFrame):
         ctk.CTkButton(action_group, text="Lọc Dữ Liệu", width=60, fg_color="#2980B9", hover_color="#1F618D", command=self.manual_filter).pack(side="left", padx=(10,0), pady=(15,0))
 
         # ==========================================
-        # 2. BỐN THẺ KPI (Chuẩn Kế toán)
+        # 2. BẢY THẺ KPI (Chuẩn Kế toán 2 Hàng: 4 + 3)
         # ==========================================
-        self.kpi_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.kpi_container.grid(row=1, column=0, sticky="ew", padx=15, pady=5)
-        self.kpi_container.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="kpi")
+        # --- HÀNG 1 (4 Thẻ): Tài chính Cốt lõi — đặt trực tiếp lên lưới chính (cột 0-3) ---
+        self.lbl_net_profit, self.border_net = self.create_kpi_card(self, 1, 0, "1. LỢI NHUẬN ĐÃ TRỪ VỐN", "#2ECC71", "Lãi gộp trừ tiếp tiền nhập hàng (Dòng tiền)", border_left=self.color_accent)
+        self.lbl_gross_profit, self.border_gross = self.create_kpi_card(self, 1, 1, "2. LỢI NHUẬN CHƯA TRỪ VỐN", "#2ECC71", "Doanh thu trừ Giá trị bán ra (Lãi gộp)", border_left=self.color_accent)
+        self.lbl_revenue, _ = self.create_kpi_card(self, 1, 2, "3. DOANH THU BÁN HÀNG", "#3498DB", "Tổng tiền khách đã thanh toán")
+        self.lbl_restock, _ = self.create_kpi_card(self, 1, 3, "4. TIỀN NHẬP KHO", "#E74C3C", "Tổng giá trị tiền chi ra nhập hàng")
 
-        # [FIX]: Nhận về cả Label tiền và Frame vạch kẻ
-        self.lbl_profit, self.border_profit = self.create_kpi_card(self.kpi_container, 0, "LỢI NHUẬN TRONG KỲ (LÃI/LỖ)", "#2ECC71", "Doanh thu bán hàng trừ đi Chi phí nhập kho", border_left=self.color_accent)
-        self.lbl_revenue, _ = self.create_kpi_card(self.kpi_container, 1, "DOANH THU BÁN HÀNG", "#3498DB", "Tổng tiền khách đã thanh toán")
-        self.lbl_cost, _ = self.create_kpi_card(self.kpi_container, 2, "CHI PHÍ NHẬP HÀNG (VẬT TƯ)", "#E74C3C", "Tổng tiền nhập nguyên vật liệu")
-        self.lbl_orders, _ = self.create_kpi_card(self.kpi_container, 3, "TỔNG ĐƠN HÀNG XUẤT", "#F39C12", "Sản lượng hóa đơn hoàn thành")
+        # --- HÀNG 2 (3 Thẻ): Số liệu Vận hành — chỉ chiếm cột 0-2, nhường cột 3 cho Top món ---
+        self.lbl_cogs, _ = self.create_kpi_card(self, 2, 0, "5. GIÁ TRỊ BÁN RA (COGS)", "#E67E22", "Tổng giá vốn nguyên liệu của các đơn đã bán")
+        self.lbl_orders, _ = self.create_kpi_card(self, 2, 1, "6. SỐ ĐƠN BÁN RA", "#F39C12", "Sản lượng hóa đơn hoàn thành")
+        self.lbl_avg_order, _ = self.create_kpi_card(self, 2, 2, "7. GIÁ TRỊ TRUNG BÌNH ĐƠN", "#9B59B6", "Doanh thu chia cho Số lượng đơn")
 
         # ==========================================
-        # 3. KHU VỰC BIỂU ĐỒ VÀ TOP MÓN 
+        # 3. KHU VỰC BIỂU ĐỒ (trái, hàng 3) VÀ TOP MÓN (phải, kéo dài từ hàng 2 -> hàng 3)
         # ==========================================
-        self.bottom_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.bottom_container.grid(row=2, column=0, sticky="nsew", padx=15, pady=10)
-        self.bottom_container.grid_columnconfigure(0, weight=7)
-        self.bottom_container.grid_columnconfigure(1, weight=3)
-        self.bottom_container.grid_rowconfigure(0, weight=1)
+        # Trái: Biểu đồ — chiếm 3 cột (0-2), chỉ nằm ở hàng cuối (hàng giãn nở)
+        self.chart_card = ctk.CTkFrame(self, fg_color=self.card_bg, corner_radius=8, border_width=1, border_color=self.border_color)
+        self.chart_card.grid(row=3, column=0, columnspan=3, sticky="nsew", padx=5, pady=(5, 15))
 
-        # Trái: Biểu đồ
-        self.chart_card = ctk.CTkFrame(self.bottom_container, fg_color=self.card_bg, corner_radius=8, border_width=1, border_color=self.border_color)
-        self.chart_card.grid(row=0, column=0, sticky="nsew", padx=5)
-        
         ctk.CTkLabel(self.chart_card, text="PHÂN TÍCH DOANH THU THEO THỜI GIAN", font=ctk.CTkFont(size=14, weight="bold"), text_color=self.text_main).pack(anchor="w", padx=20, pady=(20, 0))
         self.chart_desc = ctk.CTkLabel(self.chart_card, text="Đang tính toán...", font=ctk.CTkFont(size=11), text_color=self.text_sub)
         self.chart_desc.pack(anchor="w", padx=20, pady=(0, 20))
@@ -109,14 +105,15 @@ class PageReport(ctk.CTkFrame):
         self.canvas_frame = ctk.CTkFrame(self.chart_card, fg_color="transparent")
         self.canvas_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        # Phải: Top N món
-        self.top_card = ctk.CTkFrame(self.bottom_container, fg_color=self.card_bg, corner_radius=8, border_width=1, border_color=self.border_color)
-        self.top_card.grid(row=0, column=1, sticky="nsew", padx=5)
+        # Phải: Top N món — chiếm cột 3, KÉO LÊN từ hàng 2 (khỏa lấp vị trí "thẻ 8" còn trống)
+        # xuống hết hàng 3 => cao hơn hẳn, nhưng chỉ rộng bằng 1 cột KPI (hẹp hơn trước).
+        self.top_card = ctk.CTkFrame(self, fg_color=self.card_bg, corner_radius=8, border_width=1, border_color=self.border_color)
+        self.top_card.grid(row=2, column=3, rowspan=2, sticky="nsew", padx=5, pady=(5, 15))
 
         top_header_frame = ctk.CTkFrame(self.top_card, fg_color="transparent")
-        top_header_frame.pack(fill="x", padx=20, pady=(20, 0))
+        top_header_frame.pack(fill="x", padx=15, pady=(15, 0))
         
-        self.lbl_top_title = ctk.CTkLabel(top_header_frame, text=f"TOP {self.top_n} MÓN BÁN CHẠY", font=ctk.CTkFont(size=14, weight="bold"), text_color=self.text_main)
+        self.lbl_top_title = ctk.CTkLabel(top_header_frame, text=f"TOP {self.top_n} MÓN BÁN CHẠY", font=ctk.CTkFont(size=13, weight="bold"), text_color=self.text_main)
         self.lbl_top_title.pack(side="left")
 
         ctrl_top = ctk.CTkFrame(top_header_frame, fg_color="#333333", corner_radius=4)
@@ -124,10 +121,10 @@ class PageReport(ctk.CTkFrame):
         ctk.CTkButton(ctrl_top, text="-", width=24, height=24, fg_color="transparent", text_color="white", command=self.decrease_top_n).pack(side="left")
         ctk.CTkButton(ctrl_top, text="+", width=24, height=24, fg_color="transparent", text_color="white", command=self.increase_top_n).pack(side="left")
 
-        ctk.CTkLabel(self.top_card, text="Theo sản lượng hóa đơn", font=ctk.CTkFont(size=11), text_color=self.text_sub).pack(anchor="w", padx=20, pady=(0, 15))
+        ctk.CTkLabel(self.top_card, text="Theo sản lượng hóa đơn", font=ctk.CTkFont(size=11), text_color=self.text_sub).pack(anchor="w", padx=15, pady=(0, 12))
         
         self.top_items_list = ctk.CTkScrollableFrame(self.top_card, fg_color="transparent")
-        self.top_items_list.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.top_items_list.pack(fill="both", expand=True, padx=8, pady=(0, 10))
 
         self.after(200, lambda: self.set_quick_date("7days", self.btn_7days))
 
@@ -172,26 +169,26 @@ class PageReport(ctk.CTkFrame):
     # ==========================================
     # CÁC HÀM TIỆN ÍCH & TƯƠNG TÁC
     # ==========================================
-    def create_kpi_card(self, parent, col, title, value_color, desc, border_left=None):
-        card = ctk.CTkFrame(parent, fg_color=self.card_bg, corner_radius=8, border_width=1, border_color=self.border_color)
-        card.grid(row=0, column=col, sticky="nsew", padx=5) 
-        
+    def create_kpi_card(self, parent, row, col, title, value_color, desc, border_left=None):
+        card = ctk.CTkFrame(parent, fg_color=self.card_bg, corner_radius=8, border_width=1, border_color=self.border_color, height=120)
+        card.grid(row=row, column=col, sticky="nsew", padx=5, pady=5) 
+        card.pack_propagate(False)   # Khóa chiều cao cố định (con bên trong dùng pack, nên phải dùng pack_propagate)
+
         border_frame = None
         if border_left:
             border_frame = ctk.CTkFrame(card, width=4, fg_color=border_left, corner_radius=4)
             border_frame.pack(side="left", fill="y", pady=15, padx=(10, 0))
         
         inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(side="left", fill="both", expand=True, padx=15, pady=20)
+        inner.pack(side="left", fill="both", expand=True, padx=15, pady=15)
         
         ctk.CTkLabel(inner, text=title, font=ctk.CTkFont(size=11, weight="bold"), text_color=self.text_sub).pack(anchor="w")
         
-        lbl_val = ctk.CTkLabel(inner, text="0 ₫", font=ctk.CTkFont(size=24, weight="bold"), text_color=value_color)
+        lbl_val = ctk.CTkLabel(inner, text="0 ₫", font=ctk.CTkFont(size=22, weight="bold"), text_color=value_color)
         lbl_val.pack(anchor="w", pady=5)
         
         ctk.CTkLabel(inner, text=desc, font=ctk.CTkFont(size=10), text_color=self.text_sub).pack(anchor="w")
         
-        # [FIX]: Trả về cả Label chứa tiền và Frame chứa vạch kẻ để lát nữa đổi màu
         return lbl_val, border_frame
 
     def get_image(self, path, size=(40, 40)):
@@ -212,11 +209,9 @@ class PageReport(ctk.CTkFrame):
             self.load_report()
 
     def set_quick_date(self, mode, active_btn):
-        # Reset màu cả 3 nút
         for btn in [self.btn_today, self.btn_7days, self.btn_month]:
             btn.configure(fg_color="#333333")
         
-        # Bật màu nút đang chọn
         active_btn.configure(fg_color=self.color_accent)
 
         today = datetime.date.today()
@@ -255,32 +250,55 @@ class PageReport(ctk.CTkFrame):
         try: datetime.datetime.strptime(end_date, "%Y-%m-%d")
         except: end_date = datetime.date.today().strftime("%Y-%m-%d")
 
-        # 1. KPI CARDS (LOGIC KẾ TOÁN)
+        # 1. KPI CARDS (LOGIC KẾ TOÁN 7 THẺ)
         report = self.controller.get_sales_summary(start_date, end_date)
-        revenue = int(report['total_revenue'])
-        orders = int(report['total_orders'])
-        restock_cost = int(report['total_restock_cost']) 
+        revenue = int(report.get('total_revenue', 0))
+        orders = int(report.get('total_orders', 0))
+        restock_cost = int(report.get('total_restock_cost', 0))
+        cogs = int(report.get('total_cogs', 0))
         
-        profit = revenue - restock_cost
-        
-        if profit > 0:
-            color_profit = "#2ECC71" # Lời (Xanh)
-            profit_str = f"+{profit:,} ₫".replace(",", ".")
-        elif profit < 0:
-            color_profit = "#E74C3C" # Lỗ (Đỏ)
-            profit_str = f"{profit:,} ₫".replace(",", ".")
-        else:
-            color_profit = "#E67E22" # Hòa vốn (Cam)
-            profit_str = "0 ₫"
+        avg_order = int(revenue / orders) if orders > 0 else 0
 
-        # [FIX]: Cập nhật cả nội dung số liệu VÀ vạch màu bên trái
-        self.lbl_profit.configure(text=profit_str, text_color=color_profit)
-        if self.border_profit:
-            self.border_profit.configure(fg_color=color_profit)
+        # Lãi gộp (Chưa trừ phí nhập) = Doanh thu - Giá vốn
+        gross_profit = revenue - cogs
+        
+        # Dòng tiền (Đã trừ phí nhập) = Lãi gộp - Chi phí nhập hàng
+        net_profit = gross_profit - restock_cost
+
+        # --- Xử lý Màu sắc & Format cho Lãi Gộp ---
+        if gross_profit > 0:
+            color_gross = "#2ECC71" 
+            gross_str = f"+{gross_profit:,} ₫".replace(",", ".")
+        elif gross_profit < 0:
+            color_gross = "#E74C3C" 
+            gross_str = f"{gross_profit:,} ₫".replace(",", ".")
+        else:
+            color_gross = "#E67E22" 
+            gross_str = "0 ₫"
+
+        # --- Xử lý Màu sắc & Format cho Dòng Tiền Thuần ---
+        if net_profit > 0:
+            color_net = "#2ECC71" 
+            net_str = f"+{net_profit:,} ₫".replace(",", ".")
+        elif net_profit < 0:
+            color_net = "#E74C3C" 
+            net_str = f"{net_profit:,} ₫".replace(",", ".")
+        else:
+            color_net = "#E67E22" 
+            net_str = "0 ₫"
+
+        # Đổ dữ liệu lên UI
+        self.lbl_net_profit.configure(text=net_str, text_color=color_net)
+        if self.border_net: self.border_net.configure(fg_color=color_net)
+
+        self.lbl_gross_profit.configure(text=gross_str, text_color=color_gross)
+        if self.border_gross: self.border_gross.configure(fg_color=color_gross)
 
         self.lbl_revenue.configure(text=f"{revenue:,} ₫".replace(",", "."), text_color="#3498DB")
-        self.lbl_cost.configure(text=f"{restock_cost:,} ₫".replace(",", "."), text_color="#E74C3C")
+        self.lbl_restock.configure(text=f"{restock_cost:,} ₫".replace(",", "."), text_color="#E74C3C")
+        self.lbl_cogs.configure(text=f"{cogs:,} ₫".replace(",", "."), text_color="#E67E22")
         self.lbl_orders.configure(text=f"{orders} đơn", text_color="#F39C12") 
+        self.lbl_avg_order.configure(text=f"{avg_order:,} ₫".replace(",", "."), text_color="#9B59B6")
 
         # 2. TOP N MÓN
         for widget in self.top_items_list.winfo_children(): widget.destroy()
@@ -386,11 +404,8 @@ class PageReport(ctk.CTkFrame):
         
         return list(buckets.items()), date_type
 
-    # === BÔI ĐEN TỪ ĐÂY ĐẾN CUỐI FILE VÀ DÁN ĐÈ ĐOẠN NÀY ===
-    
     def draw_bar_chart(self, data):
-        """Khởi tạo Canvas và lắng nghe sự kiện thay đổi kích thước cửa sổ"""
-        self.current_chart_data = data # Lưu lại data để dùng khi resize
+        self.current_chart_data = data 
         
         for widget in self.canvas_frame.winfo_children(): 
             widget.destroy()
@@ -399,30 +414,25 @@ class PageReport(ctk.CTkFrame):
             ctk.CTkLabel(self.canvas_frame, text="Không có dữ liệu giao dịch trong khoảng thời gian này.", text_color=self.text_sub).pack(expand=True)
             return
 
-        # Tạo Canvas 1 lần duy nhất
         self.chart_canvas = tk.Canvas(self.canvas_frame, bg=self.card_bg, highlightthickness=0)
         self.chart_canvas.pack(fill="both", expand=True)
 
-        # Lắng nghe sự kiện co dãn (Resize)
         self.resize_timer = None
         self.chart_canvas.bind("<Configure>", self.on_canvas_resize)
 
-        # Cập nhật UI và vẽ lần đầu
         self.update_idletasks()
         self.render_canvas_graphics()
 
     def on_canvas_resize(self, event):
-        """Bộ đệm (Debounce) chống lag: Đợi 100ms sau khi ngừng kéo cửa sổ mới vẽ lại"""
         if self.resize_timer is not None:
             self.after_cancel(self.resize_timer)
         self.resize_timer = self.after(100, self.render_canvas_graphics)
 
     def render_canvas_graphics(self):
-        """Thuật toán vẽ lại các cột dựa trên kích thước mới của Canvas"""
         if not hasattr(self, 'chart_canvas') or not self.chart_canvas.winfo_exists():
             return
             
-        self.chart_canvas.delete("all") # Xóa hình cũ đi để vẽ lại hình mới
+        self.chart_canvas.delete("all") 
         
         c_width = self.chart_canvas.winfo_width()
         c_height = self.chart_canvas.winfo_height()

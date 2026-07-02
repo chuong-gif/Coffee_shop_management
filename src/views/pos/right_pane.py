@@ -59,8 +59,8 @@ class RightPane(ctk.CTkFrame):
         btn_action = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
         btn_action.pack(fill="x", pady=(15, 5))
         
-        # [FIX #2]: Mặc định tích sẵn "In Hóa Đơn" ngay từ đầu, nhân viên bỏ tích khi không cần
-        self.chk_print_var = ctk.StringVar(value="on")
+        # [FIX]: Mặc định BỎ TÍCH "In Hóa Đơn" ngay từ đầu
+        self.chk_print_var = ctk.StringVar(value="off")
         ctk.CTkCheckBox(btn_action, text="In Hóa Đơn", variable=self.chk_print_var, onvalue="on", offvalue="off", text_color="#AAAAAA", checkbox_height=20, checkbox_width=20).pack(side="left", padx=5)
 
         ctk.CTkButton(btn_action, text="Hủy đơn", width=80, fg_color="transparent", border_width=1, border_color="#E74C3C", text_color="#E74C3C", hover_color="#641E16", command=self.ui_cancel_order).pack(side="right", padx=(5, 0))
@@ -80,7 +80,6 @@ class RightPane(ctk.CTkFrame):
 
         if not items:
             ctk.CTkLabel(self.order_list_frame, text="🛍\nCHƯA CÓ MÓN NÀO", text_color="#AAAAAA").pack(pady=100)
-            # [FIX #1]: Nếu xóa hết món (kể cả đơn Mang Về, không chỉ đơn tại bàn), tự dọn về trạng thái ban đầu
             if order_id:
                 self.on_bill_cleared()
             return
@@ -104,7 +103,6 @@ class RightPane(ctk.CTkFrame):
             e_note.bind("<FocusOut>", lambda e, id=item_id, v=var_note: self.controller.update_item_note(id, v.get()))
             e_note.bind("<Return>", lambda e, id=item_id, v=var_note: self.controller.update_item_note(id, v.get()))
 
-            # [FIX #6]: Thêm nút Lưu tường minh cho ghi chú, không phụ thuộc hoàn toàn vào FocusOut
             btn_save_note = ctk.CTkButton(
                 mid_row, text="💾", width=26, height=24, fg_color="#333333", hover_color="#444444",
                 command=lambda id=item_id, v=var_note: self.controller.update_item_note(id, v.get())
@@ -142,15 +140,18 @@ class RightPane(ctk.CTkFrame):
         try: k = float(self.var_khach.get().replace(".", ""))
         except: return messagebox.showerror("Lỗi", "Nhập tiền khách đưa")
 
-        items_for_print = self.controller.get_order_items(self.current_order_id) # Lấy data trước khi đóng
+        items_for_print = self.controller.get_order_items(self.current_order_id)
         t_name = self.lbl_table_name.cget("text").split("(")[0].strip().replace("📄 ", "")
 
         final, change = self.controller.close_order(self.current_order_id, k)
         if change is None: return messagebox.showerror("Lỗi", "Khách đưa chưa đủ tiền")
 
-        # Xử lý In Hóa Đơn
-        if self.chk_print_var.get() == "off":
-            self.printer.print_receipt(self.current_order_id, t_name, items_for_print, final, k, change)
+        # [FIX LOGIC NGƯỢC]: Chỉ xuất hóa đơn nếu có tích "on"
+        if self.chk_print_var.get() == "on":
+            try:
+                self.printer.print_receipt(self.current_order_id, t_name, items_for_print, final, k, change)
+            except Exception as e:
+                messagebox.showerror("Lỗi Máy In", f"Không thể xuất hóa đơn: {e}")
 
         messagebox.showinfo("Xong", f"Thanh toán hoàn tất!\nTiền thừa: {change:,.0f} đ".replace(",", "."))
         self.clear_ui()
@@ -171,7 +172,6 @@ class RightPane(ctk.CTkFrame):
         self.load_order(None, None, "CHƯA CHỌN BÀN")
 
     def ui_custom_recipe(self, item_id, do_uong_id, current_custom_recipe_str):
-        # Tái sử dụng logic popup sửa công thức của bản cũ (rút gọn)
         popup = ctk.CTkToplevel(self)
         popup.title("Sửa C.Thức")
         popup.geometry("350x450")

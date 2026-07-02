@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS chi_tiet_don_hang (
     do_uong_id INTEGER NOT NULL,
     so_luong INTEGER NOT NULL DEFAULT 1,
     don_gia INTEGER NOT NULL,
+    gia_von INTEGER NOT NULL DEFAULT 0,
     ghi_chu TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(don_hang_id) REFERENCES don_hang(id),

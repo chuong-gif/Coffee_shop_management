@@ -3,13 +3,14 @@ import customtkinter as ctk
 import tkinter.messagebox as messagebox
 from PIL import Image
 import os
+import datetime
  
 class LeftPane(ctk.CTkFrame):
     def __init__(self, master, controller, on_table_select, on_item_add):
         super().__init__(master, fg_color="transparent")
         self.controller = controller
-        self.on_table_select = on_table_select # Hàm callback gọi sang Main
-        self.on_item_add = on_item_add         # Hàm callback gọi sang Main
+        self.on_table_select = on_table_select 
+        self.on_item_add = on_item_add         
  
         self.current_category = "Tất cả"
         self.selected_table_id = None
@@ -21,17 +22,16 @@ class LeftPane(ctk.CTkFrame):
         self.color_occupied = "#922B21"
         self.color_accent = "#E67E22"
  
-        # [FIX #5]: Kích thước tối thiểu mỗi thẻ để tự tính số cột theo bề rộng thực tế
+        # [FIX]: Tăng kích thước tối thiểu và đặt mặc định
         self.min_table_card_w = 120
-        self.min_menu_card_w = 190
+        self.min_menu_card_w = 230  # Tăng lên 230px để thẻ món ăn rộng rãi hơn
         self.table_cols = 4
-        self.menu_cols = 3  # mặc định 1 hàng 3 món thay vì 2
+        self.menu_cols = 4  
         self._resize_jobs = {}
  
         self.build_ui()
  
     def build_ui(self):
-        # [FIX #5]: PanedWindow dọc -> kéo được ranh giới giữa "Sơ đồ bàn" và "Menu"
         self.v_paned = tk.PanedWindow(
             self, orient="vertical", sashwidth=6, sashrelief="flat",
             bg="#121212", bd=0, opaqueresize=True
@@ -44,7 +44,10 @@ class LeftPane(ctk.CTkFrame):
         t_header = ctk.CTkFrame(self.table_card, fg_color="transparent")
         t_header.pack(fill="x", padx=15, pady=10)
         ctk.CTkLabel(t_header, text="SƠ ĐỒ BÀN KHÁCH", font=ctk.CTkFont(size=14, weight="bold"), text_color="white").pack(side="left")
-        ctk.CTkButton(t_header, text="+ Thiết lập bàn", width=90, height=24, fg_color="transparent", border_width=1, border_color=self.color_accent, text_color=self.color_accent, hover_color="#3E2723", command=self.ui_add_table_popup).pack(side="left", padx=10)
+        
+        # [TÍNH NĂNG MỚI]: Thêm nút sửa mẫu hóa đơn
+        ctk.CTkButton(t_header, text="+ Thiết lập bàn", width=90, height=24, fg_color="transparent", border_width=1, border_color=self.color_accent, text_color=self.color_accent, hover_color="#3E2723", command=self.ui_add_table_popup).pack(side="left", padx=(15, 5))
+        ctk.CTkButton(t_header, text="🧾 Mẫu hóa đơn", width=90, height=24, fg_color="transparent", border_width=1, border_color="#3498DB", text_color="#3498DB", hover_color="#1A5276", command=self.ui_receipt_template_popup).pack(side="left", padx=5)
  
         legend_frame = ctk.CTkFrame(t_header, fg_color="transparent")
         legend_frame.pack(side="right")
@@ -57,7 +60,6 @@ class LeftPane(ctk.CTkFrame):
         self.table_grid.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         self.table_grid.bind("<Configure>", self._on_table_grid_resize)
  
-        # [FIX]: stretch="always" -> khi kéo cao/thấp, không gian dư chia tỉ lệ cho cả 2 khung
         self.v_paned.add(self.table_card, minsize=170, stretch="always")
  
         # --- KHU DƯỚI: Mang về + Menu ---
@@ -84,7 +86,6 @@ class LeftPane(ctk.CTkFrame):
  
         self.v_paned.add(self.bottom_frame, minsize=280, stretch="always")
  
-        # [FIX]: Đặt sash dựa trên sự kiện <Configure> có kích thước thật, thay vì timer cố định
         self._v_sash_initialized = False
         self.v_paned.bind("<Configure>", self._on_v_paned_configure)
  
@@ -101,8 +102,6 @@ class LeftPane(ctk.CTkFrame):
         except Exception:
             pass
  
-    # --- [FIX #5]: Responsive column count ---
- 
     def _debounced(self, key, delay_ms, func):
         job = self._resize_jobs.get(key)
         if job:
@@ -118,19 +117,24 @@ class LeftPane(ctk.CTkFrame):
         self._debounced("menu", 150, lambda: self._recompute_menu_cols(width))
  
     def _recompute_table_cols(self, width):
-        cols = max(2, width // self.min_table_card_w)
+        # Trừ hao 40px vùng an toàn cho thanh cuộn (scrollbar) và lề 2 bên
+        safe_width = width - 40
+        # [SMART LIMIT]: Giới hạn số cột bàn - Tối thiểu 2, tối đa 7
+        cols = max(2, min(7, safe_width // self.min_table_card_w))
         if cols != self.table_cols:
             self.table_cols = cols
             self.refresh_tables()
  
     def _recompute_menu_cols(self, width):
-        cols = max(2, width // self.min_menu_card_w)
+        # Trừ hao 40px vùng an toàn
+        safe_width = width - 40
+        # [SMART LIMIT]: Giới hạn số cột món ăn - Tối thiểu 2, tối đa 4
+        cols = max(2, min(4, safe_width // self.min_menu_card_w))
         if cols != self.menu_cols:
             self.menu_cols = cols
             self.refresh_menu()
  
     # --- RENDER ---
- 
     def refresh_tables(self):
         for widget in self.table_grid.winfo_children(): widget.destroy()
         tables = self.controller.get_tables_data()
@@ -155,7 +159,7 @@ class LeftPane(ctk.CTkFrame):
  
             def click_ev(event, tid=t_id, tname=t_name):
                 self.selected_table_id = tid
-                self.refresh_tables() # Update border color
+                self.refresh_tables() 
                 self.on_table_select(tid, tname)
  
             card.bind("<Button-1>", click_ev)
@@ -163,17 +167,18 @@ class LeftPane(ctk.CTkFrame):
             lbl.place(relx=0.5, rely=0.4, anchor="center")
             lbl.bind("<Button-1>", click_ev)
  
-            # [FIX #3]: Icon sửa tên / xóa bàn đặt ở góc phải DƯỚI, dùng icon đơn sắc + màu trung tính
-            # cho hợp tổng thể (tránh emoji nhiều màu, tránh che khuất tên bàn ở giữa thẻ)
+            # Đặt khung icon xuống góc dưới bên phải (se), nền hoàn toàn trong suốt
             icon_row = ctk.CTkFrame(card, fg_color="transparent")
-            icon_row.place(relx=1.0, rely=1.0, anchor="se", x=-4, y=-4)
-            ctk.CTkButton(icon_row, text="✎", width=20, height=18, corner_radius=5,
-                          fg_color="#161616", hover_color="#3A3A3A", text_color="#DDDDDD",
-                          font=ctk.CTkFont(size=11),
-                          command=lambda tid=t_id, tname=t_name: self.ui_rename_table_popup(tid, tname)).pack(side="left", padx=(0, 3))
-            ctk.CTkButton(icon_row, text="✕", width=20, height=18, corner_radius=5,
-                          fg_color="#161616", hover_color="#5A1F1A", text_color="#DDDDDD",
-                          font=ctk.CTkFont(size=11),
+            icon_row.place(relx=1.0, rely=1.0, anchor="se", x=-5, y=-5)
+            
+            # Nút Cài đặt (Sửa) - Đổi sang icon bánh răng, ẩn viền
+            ctk.CTkButton(icon_row, text="⚙", width=24, height=24, fg_color="transparent", 
+                          hover_color="#333333", text_color="#BDC3C7", font=ctk.CTkFont(size=14),
+                          command=lambda tid=t_id, tname=t_name: self.ui_rename_table_popup(tid, tname)).pack(side="left")
+            
+            # Nút Xóa - Nền trong suốt, khi hover mới hiện màu đỏ
+            ctk.CTkButton(icon_row, text="✖", width=24, height=24, fg_color="transparent", 
+                          hover_color="#E74C3C", text_color="#BDC3C7", font=ctk.CTkFont(size=12),
                           command=lambda tid=t_id, tname=t_name: self.ui_delete_table_confirm(tid, tname)).pack(side="left")
  
     def refresh_menu(self):
@@ -198,6 +203,7 @@ class LeftPane(ctk.CTkFrame):
             card.grid(row=i // cols, column=i % cols, padx=5, pady=5, sticky="nsew")
             card.pack_propagate(False)
  
+            # 1. Xếp hình ảnh bên Trái
             img_obj = self.get_image(hinh_anh)
             if img_obj:
                 ctk.CTkLabel(card, image=img_obj, text="").pack(side="left", padx=10, pady=10)
@@ -207,12 +213,16 @@ class LeftPane(ctk.CTkFrame):
                 icon.pack_propagate(False)
                 ctk.CTkLabel(icon, text=ten_mon[:2].upper(), text_color="white", font=ctk.CTkFont(weight="bold")).pack(expand=True)
  
-            info = ctk.CTkFrame(card, fg_color="transparent")
-            info.pack(side="left", fill="both", expand=True, pady=10)
-            ctk.CTkLabel(info, text=ten_mon, font=ctk.CTkFont(size=12, weight="bold"), text_color="white", anchor="w").pack(fill="x")
-            ctk.CTkLabel(info, text=f"{gia_ban:,.0f} đ".replace(",", "."), font=ctk.CTkFont(size=12, weight="bold"), text_color=self.color_accent, anchor="w").pack(fill="x", side="bottom")
- 
+            # 2. Xếp nút [+] bên Phải TRƯỚC để nó giữ chỗ an toàn
             ctk.CTkButton(card, text="+", width=30, height=30, fg_color="#333333", command=lambda id=d_id: self.on_item_add(id)).pack(side="right", padx=10)
+
+            # 3. Xếp phần Thông tin vào không gian còn lại ở giữa
+            info = ctk.CTkFrame(card, fg_color="transparent")
+            info.pack(side="left", fill="both", expand=True, pady=10, padx=(0, 5))
+            
+            # Cỡ chữ tên món có thể giảm xuống 11 để chống tràn nếu tên quá dài
+            ctk.CTkLabel(info, text=ten_mon, font=ctk.CTkFont(size=11, weight="bold"), text_color="white", anchor="w").pack(fill="x")
+            ctk.CTkLabel(info, text=f"{gia_ban:,.0f} đ".replace(",", "."), font=ctk.CTkFont(size=11, weight="bold"), text_color=self.color_accent, anchor="w").pack(fill="x", side="bottom")
  
     def set_category(self, cat):
         self.current_category = cat
@@ -239,7 +249,6 @@ class LeftPane(ctk.CTkFrame):
                 popup.destroy()
         ctk.CTkButton(popup, text="Thêm Bàn", fg_color=self.color_accent, command=submit).pack(pady=10)
  
-    # [FIX #3]: Popup sửa tên bàn
     def ui_rename_table_popup(self, table_id, current_name):
         popup = ctk.CTkToplevel(self)
         popup.title("Sửa Tên Bàn")
@@ -257,10 +266,117 @@ class LeftPane(ctk.CTkFrame):
                 popup.destroy()
         ctk.CTkButton(popup, text="Lưu", fg_color=self.color_accent, command=submit).pack(pady=10)
  
-    # [FIX #3]: Xóa bàn có xác nhận
     def ui_delete_table_confirm(self, table_id, table_name):
         if messagebox.askyesno("Xóa bàn", f"Xóa bàn '{table_name}'?\n(Chỉ nên xóa bàn đang Trống, không có đơn mở)"):
             self.controller.delete_table(table_id)
             if self.selected_table_id == table_id:
                 self.selected_table_id = None
             self.refresh_tables()
+
+    # ==========================================
+    # POPUP CHỈNH SỬA MẪU HÓA ĐƠN (LIVE PREVIEW)
+    # ==========================================
+    def ui_receipt_template_popup(self):
+        popup = ctk.CTkToplevel(self)
+        popup.title("Thiết Lập Mẫu Hóa Đơn")
+        popup.geometry("800x550")
+        popup.attributes("-topmost", True)
+        popup.configure(fg_color="#121212")
+
+        popup.grid_columnconfigure(0, weight=1)
+        popup.grid_columnconfigure(1, weight=1)
+        popup.grid_rowconfigure(0, weight=1)
+
+        # Lấy dữ liệu mẫu hiện tại
+        try:
+            template_data = self.controller.get_receipt_template()
+        except AttributeError:
+            template_data = {"ten_quan": "COFFEE SHOP", "dia_chi": "Địa chỉ quán", "dien_thoai": "SĐT", "loi_cam_on": "Cảm ơn quý khách!"}
+
+        var_name = ctk.StringVar(value=template_data.get("ten_quan", ""))
+        var_address = ctk.StringVar(value=template_data.get("dia_chi", ""))
+        var_phone = ctk.StringVar(value=template_data.get("dien_thoai", ""))
+        var_footer = ctk.StringVar(value=template_data.get("loi_cam_on", ""))
+
+        # --- KHUNG BÊN TRÁI: FORM NHẬP LIỆU ---
+        form_frame = ctk.CTkFrame(popup, fg_color="#212121", corner_radius=8, border_width=1, border_color="#333333")
+        form_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+
+        ctk.CTkLabel(form_frame, text="⚙️ THÔNG TIN IN TRÊN BILL", font=ctk.CTkFont(size=16, weight="bold"), text_color="white").pack(anchor="w", padx=20, pady=(20, 15))
+
+        def create_input(parent, label, var):
+            ctk.CTkLabel(parent, text=label, font=ctk.CTkFont(size=12, weight="bold"), text_color="#AAAAAA").pack(anchor="w", padx=20)
+            entry = ctk.CTkEntry(parent, textvariable=var, height=35, fg_color="#121212", border_color="#333333", text_color="white")
+            entry.pack(fill="x", padx=20, pady=(5, 15))
+            var.trace_add("write", self._update_live_preview)
+
+        create_input(form_frame, "TÊN QUÁN / THƯƠNG HIỆU:", var_name)
+        create_input(form_frame, "ĐỊA CHỈ QUÁN:", var_address)
+        create_input(form_frame, "SỐ ĐIỆN THOẠI / HOTLINE:", var_phone)
+        create_input(form_frame, "LỜI CẢM ƠN (CHÂN TRANG):", var_footer)
+
+        def save_template():
+            data = {
+                "ten_quan": var_name.get().strip(),
+                "dia_chi": var_address.get().strip(),
+                "dien_thoai": var_phone.get().strip(),
+                "loi_cam_on": var_footer.get().strip()
+            }
+            try:
+                self.controller.save_receipt_template(data)
+                messagebox.showinfo("Thành công", "Đã lưu mẫu hóa đơn thành công!", parent=popup)
+                popup.destroy()
+            except Exception as e:
+                messagebox.showerror("Lỗi", f"Không thể lưu: {e}", parent=popup)
+
+        ctk.CTkButton(form_frame, text="Lưu Cấu Hình Mẫu", fg_color="#3498DB", hover_color="#2980B9", height=45, font=ctk.CTkFont(weight="bold"), command=save_template).pack(fill="x", padx=20, pady=(10, 20), side="bottom")
+
+        # --- KHUNG BÊN PHẢI: LIVE PREVIEW ---
+        preview_frame = ctk.CTkFrame(popup, fg_color="#F2F3F4", corner_radius=0)
+        preview_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 20), pady=20)
+        
+        ctk.CTkLabel(preview_frame, text="XEM TRƯỚC HÓA ĐƠN (LIVE PREVIEW)", font=ctk.CTkFont(size=12, weight="bold"), text_color="#7F8C8D").pack(pady=(10, 5))
+
+        # Khung giấy cuộn bill
+        paper_frame = ctk.CTkFrame(preview_frame, fg_color="white", corner_radius=0, border_width=1, border_color="#BDC3C7")
+        paper_frame.pack(fill="both", expand=True, padx=40, pady=(0, 20))
+
+        # Dùng Font Monospace để mô phỏng chính xác máy in nhiệt K80
+        self.preview_text = ctk.CTkTextbox(paper_frame, fg_color="white", text_color="black", font=ctk.CTkFont(family="Courier", size=12), wrap="word")
+        self.preview_text.pack(fill="both", expand=True, padx=15, pady=15)
+        
+        # Lưu các biến để hàm update lấy dữ liệu
+        self._preview_vars = (var_name, var_address, var_phone, var_footer)
+        self._update_live_preview()
+
+    def _update_live_preview(self, *args):
+        if not hasattr(self, 'preview_text'): return
+        
+        name, addr, phone, footer = [v.get() for v in self._preview_vars]
+        divider = "-" * 42
+        now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+
+        # Sử dụng f-string nối dòng để loại bỏ triệt để khoảng trắng thụt lề của code
+        bill_content = (
+            f"{name.center(42)}\n"
+            f"{addr.center(42)}\n"
+            f"{phone.center(42)}\n"
+            f"{divider}\n"
+            f"{'HOA DON THANH TOAN'.center(42)}\n"
+            f"So don: #DEMO_123\n"
+            f"Thoi gian: {now_str}\n"
+            f"{divider}\n"
+            f"TEN MON              SL      THANH TIEN\n"
+            f"Ca Phe Sua Da        2         50.000 d\n"
+            f"Tra Dao Cam Sa       1         45.000 d\n"
+            f"Banh Mi Nuong        1         20.000 d\n"
+            f"{divider}\n"
+            f"TONG CONG:                    115.000 d\n"
+            f"{divider}\n"
+            f"{footer.center(42)}\n"
+        )
+        
+        self.preview_text.configure(state="normal")
+        self.preview_text.delete("1.0", "end")
+        self.preview_text.insert("1.0", bill_content)
+        self.preview_text.configure(state="disabled")

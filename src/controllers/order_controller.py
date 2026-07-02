@@ -142,3 +142,15 @@ class OrderController:
         import json
         recipe_str = json.dumps(recipe_dict) if recipe_dict else None
         self.order_model.update_custom_recipe(item_id, recipe_str)
+
+    def get_receipt_template(self):
+        return self.order_model.get_receipt_template()
+
+    def save_receipt_template(self, template_data):
+        self.order_model.save_receipt_template(
+            template_data.get('ten_quan', ''),
+            template_data.get('dia_chi', ''),
+            template_data.get('dien_thoai', ''),
+            template_data.get('loi_cam_on', '')
+        )
+        return True, "Cập nhật mẫu hóa đơn thành công!"

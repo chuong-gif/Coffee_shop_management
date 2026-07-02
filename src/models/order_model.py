@@ -22,6 +22,28 @@ class OrderModel:
     def _connect(self):
         return sqlite3.connect(self.db_path)
 
+    # ==========================================
+    # LOGIC KẾ TOÁN DỒN TÍCH (TÍNH GIÁ VỐN)
+    # ==========================================
+    def _calculate_cogs(self, cursor, do_uong_id):
+        """Tính giá vốn của 1 ly đồ uống dựa trên định mức công thức chuẩn và giá trị kho hiện tại"""
+        cursor.execute("""
+            SELECT ct.so_luong_tru, k.gia_von 
+            FROM cong_thuc ct
+            JOIN kho_nguyen_lieu k ON ct.nguyen_lieu_id = k.id
+            WHERE ct.do_uong_id = ?
+        """, (do_uong_id,))
+        ingredients = cursor.fetchall()
+        
+        cogs = 0
+        for qty, unit_cost in ingredients:
+            cogs += (qty * unit_cost)
+            
+        return int(cogs)
+
+    # ==========================================
+    # CÁC THAO TÁC ĐƠN HÀNG
+    # ==========================================
     def create_order(self, table_id=None, loai_don="Tại bàn"):
         order_code = f"DH{int(datetime.datetime.now().timestamp())}"
         conn = self._connect()
@@ -43,8 +65,6 @@ class OrderModel:
             cursor.execute("SELECT id, ma_don, ban_id, loai_don, ghi_chu FROM don_hang WHERE ban_id = ? AND trang_thai = 'Mở' ORDER BY id DESC LIMIT 1", (table_id,))
         order = cursor.fetchone()
 
-        # [FIX]: Nếu đơn "Mở" nhưng KHÔNG có món nào (rác từ dữ liệu cũ, hoặc lỗi phát sinh),
-        # tự động hủy ngầm và coi như KHÔNG có đơn đang mở -> tránh hiển thị "Đơn #xx" ma
         if order:
             order_id = order[0]
             cursor.execute("SELECT COUNT(*) FROM chi_tiet_don_hang WHERE don_hang_id = ?", (order_id,))
@@ -68,11 +88,17 @@ class OrderModel:
     def add_order_item(self, order_id, do_uong_id, quantity=1, ghi_chu=None):
         conn = self._connect()
         cursor = conn.cursor()
+        
+        # 1. Lấy giá bán
         cursor.execute("SELECT gia_ban FROM do_uong WHERE id = ?", (do_uong_id,))
         row = cursor.fetchone()
         if not row: return
-
         don_gia = int(row[0])
+
+        # 2. Tính giá vốn của món này tại khoảnh khắc hiện tại
+        gia_von_1_ly = self._calculate_cogs(cursor, do_uong_id)
+
+        # 3. Lưu vào DB kèm theo Giá vốn (Để báo cáo Lãi/Lỗ sau này không bị sai lệch)
         if not ghi_chu:
             cursor.execute("SELECT id, so_luong FROM chi_tiet_don_hang WHERE don_hang_id = ? AND do_uong_id = ? AND (ghi_chu IS NULL OR ghi_chu = '') AND cong_thuc_tuy_chinh IS NULL", (order_id, do_uong_id))
             existing = cursor.fetchone()
@@ -80,9 +106,10 @@ class OrderModel:
                 item_id, existing_qty = existing
                 cursor.execute("UPDATE chi_tiet_don_hang SET so_luong = ? WHERE id = ?", (existing_qty + quantity, item_id))
             else:
-                cursor.execute("INSERT INTO chi_tiet_don_hang (don_hang_id, do_uong_id, so_luong, don_gia, ghi_chu) VALUES (?, ?, ?, ?, ?)", (order_id, do_uong_id, quantity, don_gia, ghi_chu))
+                cursor.execute("INSERT INTO chi_tiet_don_hang (don_hang_id, do_uong_id, so_luong, don_gia, gia_von, ghi_chu) VALUES (?, ?, ?, ?, ?, ?)", (order_id, do_uong_id, quantity, don_gia, gia_von_1_ly, ghi_chu))
         else:
-            cursor.execute("INSERT INTO chi_tiet_don_hang (don_hang_id, do_uong_id, so_luong, don_gia, ghi_chu) VALUES (?, ?, ?, ?, ?)", (order_id, do_uong_id, quantity, don_gia, ghi_chu))
+            cursor.execute("INSERT INTO chi_tiet_don_hang (don_hang_id, do_uong_id, so_luong, don_gia, gia_von, ghi_chu) VALUES (?, ?, ?, ?, ?, ?)", (order_id, do_uong_id, quantity, don_gia, gia_von_1_ly, ghi_chu))
+        
         conn.commit()
         conn.close()
 
@@ -146,7 +173,6 @@ class OrderModel:
             self.table_model.set_table_status(ban_id, "Trống")
         return total, tien_thua
 
-    # [FIX CỐT LÕI]: Dùng trực tiếp order_id để Move hoặc Merge
     def move_order(self, order_id, source_table_id, target_table_id):
         if source_table_id == target_table_id: return False
 
@@ -238,7 +264,27 @@ class OrderModel:
     def update_custom_recipe(self, item_id, recipe_str):
         conn = self._connect()
         cursor = conn.cursor()
-        cursor.execute("UPDATE chi_tiet_don_hang SET cong_thuc_tuy_chinh = ? WHERE id = ?", (recipe_str, item_id))
+        
+        # [CẬP NHẬT KẾ TOÁN]: Tính lại giá vốn nếu khách hàng thay đổi định lượng nguyên liệu
+        cogs = 0
+        if recipe_str:
+            try:
+                recipe_dict = json.loads(recipe_str)
+                for nl_id, qty in recipe_dict.items():
+                    cursor.execute("SELECT gia_von FROM kho_nguyen_lieu WHERE id = ?", (nl_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        cogs += float(qty) * float(row[0])
+            except:
+                pass
+        else:
+            # Nếu khách reset về công thức gốc, tính lại giá vốn gốc
+            cursor.execute("SELECT do_uong_id FROM chi_tiet_don_hang WHERE id = ?", (item_id,))
+            do_uong_row = cursor.fetchone()
+            if do_uong_row:
+                cogs = self._calculate_cogs(cursor, do_uong_row[0])
+
+        cursor.execute("UPDATE chi_tiet_don_hang SET cong_thuc_tuy_chinh = ?, gia_von = ? WHERE id = ?", (recipe_str, int(cogs), item_id))
         conn.commit()
         conn.close()
 
@@ -247,5 +293,42 @@ class OrderModel:
         cursor = conn.cursor()
         cursor.execute("UPDATE don_hang SET trang_thai = 'Đã Hủy' WHERE id = ?", (order_id,))
         if table_id: cursor.execute("UPDATE ban SET trang_thai = 'Trống' WHERE id = ?", (table_id,))
+        conn.commit()
+        conn.close()
+
+    # ==========================================
+    # QUẢN LÝ MẪU HÓA ĐƠN
+    # ==========================================
+    def get_receipt_template(self):
+        conn = self._connect()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS mau_hoa_don (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                ten_quan TEXT,
+                dia_chi TEXT,
+                dien_thoai TEXT,
+                loi_cam_on TEXT
+            )
+        """)
+        cursor.execute("SELECT ten_quan, dia_chi, dien_thoai, loi_cam_on FROM mau_hoa_don WHERE id = 1")
+        row = cursor.fetchone()
+        
+        if not row:
+            cursor.execute("INSERT INTO mau_hoa_don (id, ten_quan, dia_chi, dien_thoai, loi_cam_on) VALUES (1, 'COFFEE SHOP OFFLINE', '123 Thôn Phi Có, Đam Rông 3', 'Hotline: 0123 456 789', 'Xin chân thành cảm ơn và hẹn gặp lại quý khách!')")
+            conn.commit()
+            row = ('COFFEE SHOP OFFLINE', '123 Thôn Phi Có, Đam Rông 3', 'Hotline: 0123 456 789', 'Xin chân thành cảm ơn và hẹn gặp lại quý khách!')
+        conn.close()
+        
+        return {"ten_quan": row[0], "dia_chi": row[1], "dien_thoai": row[2], "loi_cam_on": row[3]}
+
+    def save_receipt_template(self, ten_quan, dia_chi, dien_thoai, loi_cam_on):
+        conn = self._connect()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE mau_hoa_don 
+            SET ten_quan = ?, dia_chi = ?, dien_thoai = ?, loi_cam_on = ? 
+            WHERE id = 1
+        """, (ten_quan, dia_chi, dien_thoai, loi_cam_on))
         conn.commit()
         conn.close()
