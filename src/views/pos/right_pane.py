@@ -149,7 +149,7 @@ class RightPane(ctk.CTkFrame):
         if change is None: return messagebox.showerror("Lỗi", "Khách đưa chưa đủ tiền")
 
         # Xử lý In Hóa Đơn
-        if self.chk_print_var.get() == "on":
+        if self.chk_print_var.get() == "off":
             self.printer.print_receipt(self.current_order_id, t_name, items_for_print, final, k, change)
 
         messagebox.showinfo("Xong", f"Thanh toán hoàn tất!\nTiền thừa: {change:,.0f} đ".replace(",", "."))
