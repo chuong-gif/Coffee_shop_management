@@ -12,7 +12,7 @@ class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Phần Mềm Quản Lý Quán Cà Phê - Offline v1.0")
+        self.title("Phần Mềm Quản Lý Quán Cà Phê - Offline v2.0")
         self.geometry("1200x700")
         self.after(0, lambda: self.state('zoomed'))
         ctk.set_appearance_mode("Dark") 
