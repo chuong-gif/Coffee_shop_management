@@ -5,6 +5,7 @@ import sys
 
 # Khởi tạo giao diện ứng dụng chính
 from src.views.main_window import MainWindow
+from src.views.login_window import LoginWindow
 
 class SplashScreen(ctk.CTk):
     def __init__(self):
@@ -71,11 +72,18 @@ class SplashScreen(ctk.CTk):
             self.after(50, self.update_progress) # Tốc độ load (50ms)
         else:
             self.destroy() # Đóng màn hình load
-            launch_main_app() # Gọi hàm mở App chính
+            launch_login_app() # ĐỔI: Gọi màn hình đăng nhập
 
+# Hàm mở màn hình chính (Sau khi đăng nhập thành công)
 def launch_main_app():
     app = MainWindow()
     app.mainloop()
+
+# Hàm mở màn hình đăng nhập
+def launch_login_app():
+    # Khởi tạo form đăng nhập, truyền hàm launch_main_app vào làm callback
+    login_app = LoginWindow(on_login_success=launch_main_app)
+    login_app.mainloop()
 
 if __name__ == "__main__":
     splash = SplashScreen()

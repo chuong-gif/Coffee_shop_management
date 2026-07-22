@@ -19,12 +19,29 @@ ENV/
 *.db
 *.sqlite
 *.sqlite3
+database/backups/
+database/mock_receipts/
 
 # 5. File cấu hình môi trường chứa token bảo mật (Nếu sau này có dùng)
 .env
 local_config.py
+google_client_secret.json
+*.pickle
+.google_drive_token.pickle
+.last_cloud_backup.txt
 
 # 6. Các file rác của hệ điều hành Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# 7. File Build từ PyInstaller & Thư viện đính kèm (Nặng và không thuộc mã nguồn)
+build/
+dist/
+*.spec
+VC_redist.x64.exe
+*.exe
+
+# 8. File Log và File hóa đơn thử nghiệm (Mock data)
+*.log
+receipt_mock_*.txt

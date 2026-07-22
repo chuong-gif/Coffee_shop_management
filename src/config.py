@@ -1,7 +1,18 @@
 import os
+import sys
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+def get_base_path():
+    if getattr(sys, 'frozen', False):
+        # Khi đóng gói, lấy đường dẫn từ thư mục _internal của PyInstaller
+        return sys._MEIPASS
+    else:
+        # Khi chạy code (python main.py), lấy thư mục gốc dự án
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+BASE_DIR = Path(get_base_path())
+
+# Tạo đường dẫn tuyệt đối chuẩn xác
 DB_PATH = BASE_DIR / "database" / "coffee_shop.db"
 SCHEMA_PATH = BASE_DIR / "database" / "schema.sql"
 GOOGLE_CLIENT_SECRETS = BASE_DIR / "google_client_secret.json"

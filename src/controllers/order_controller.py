@@ -116,8 +116,8 @@ class OrderController:
             return True, "Chuyển bàn/thực hiện gộp đơn thành công.", new_order_id
         return False, "Lỗi cơ sở dữ liệu khi chuyển đơn.", None
 
-    def close_order(self, order_id, tien_khach_dua):
-        return self.order_model.close_order(order_id, tien_khach_dua)
+    def close_order(self, order_id, tien_khach_dua, tien_giam_gia=0, ma_giam_gia=None):
+        return self.order_model.close_order(order_id, tien_khach_dua, tien_giam_gia, ma_giam_gia)
         
     def update_item_qty(self, item_id, new_qty):
         if new_qty <= 0:
@@ -154,3 +154,18 @@ class OrderController:
             template_data.get('loi_cam_on', '')
         )
         return True, "Cập nhật mẫu hóa đơn thành công!"
+    
+    # === BỔ SUNG CHO TÍNH NĂNG LỊCH SỬ HÓA ĐƠN ===
+    def get_history_orders(self, start_date, end_date):
+        return self.order_model.get_history_orders(start_date, end_date)
+        
+    def get_order_summary(self, order_id):
+        return self.order_model.get_order_summary(order_id)
+        
+    def void_paid_order(self, order_id):
+        self.order_model.void_paid_order(order_id)
+        return True
+    
+    def reopen_order(self, order_id):
+        self.order_model.reopen_order(order_id)
+        return True

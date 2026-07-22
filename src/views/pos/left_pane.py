@@ -4,6 +4,8 @@ import tkinter.messagebox as messagebox
 from PIL import Image
 import os
 import datetime
+from src.utils import session
+from tkcalendar import DateEntry
  
 class LeftPane(ctk.CTkFrame):
     def __init__(self, master, controller, on_table_select, on_item_add):
@@ -48,7 +50,12 @@ class LeftPane(ctk.CTkFrame):
         # [TÍNH NĂNG MỚI]: Thêm nút sửa mẫu hóa đơn
         ctk.CTkButton(t_header, text="+ Thiết lập bàn", width=90, height=24, fg_color="transparent", border_width=1, border_color=self.color_accent, text_color=self.color_accent, hover_color="#3E2723", command=self.ui_add_table_popup).pack(side="left", padx=(15, 5))
         ctk.CTkButton(t_header, text="🧾 Mẫu hóa đơn", width=90, height=24, fg_color="transparent", border_width=1, border_color="#3498DB", text_color="#3498DB", hover_color="#1A5276", command=self.ui_receipt_template_popup).pack(side="left", padx=5)
- 
+
+        # [TÍNH NĂNG MỚI]: Nút quản lý Mã giảm giá (Chỉ hiện nếu có quyền)
+        if session.current_user.get("quyen_ma_giam_gia", 0) == 1:
+            ctk.CTkButton(t_header, text="🎟️ Mã giảm giá", width=90, height=24, fg_color="transparent", border_width=1, border_color="#9B59B6", text_color="#9B59B6", hover_color="#5B2C6F", command=self.ui_discount_popup).pack(side="left", padx=5)
+
+
         legend_frame = ctk.CTkFrame(t_header, fg_color="transparent")
         legend_frame.pack(side="right")
         self.lbl_legend_trong = ctk.CTkLabel(legend_frame, text="🟢 Trống", text_color="#AAAAAA", font=ctk.CTkFont(size=11))
@@ -380,3 +387,138 @@ class LeftPane(ctk.CTkFrame):
         self.preview_text.delete("1.0", "end")
         self.preview_text.insert("1.0", bill_content)
         self.preview_text.configure(state="disabled")
+
+    # ==========================================
+    # POPUP QUẢN LÝ MÀ GIẢM GIÁ (TÍCH HỢP DATE PICKER)
+    # ==========================================
+    def ui_discount_popup(self):
+        popup = ctk.CTkToplevel(self)
+        popup.title("Quản Lý Mã Giảm Giá")
+        popup.geometry("700x500")
+        popup.attributes("-topmost", True)
+        popup.configure(fg_color="#121212")
+
+        # --- TRÊN: FORM THÊM MÃ ---
+        form_frame = ctk.CTkFrame(popup, fg_color="#212121", corner_radius=8)
+        form_frame.pack(fill="x", padx=15, pady=15)
+        
+        row1 = ctk.CTkFrame(form_frame, fg_color="transparent")
+        row1.pack(fill="x", padx=10, pady=(10, 5))
+        
+        col1 = ctk.CTkFrame(row1, fg_color="transparent")
+        col1.pack(side="left", padx=5)
+        ctk.CTkLabel(col1, text="Mã Code (VD: TET2026)", font=ctk.CTkFont(size=11), text_color="#AAAAAA").pack(anchor="w")
+        var_code = ctk.StringVar()
+        ctk.CTkEntry(col1, textvariable=var_code, width=150).pack()
+        
+        col2 = ctk.CTkFrame(row1, fg_color="transparent")
+        col2.pack(side="left", padx=5)
+        ctk.CTkLabel(col2, text="Loại giảm", font=ctk.CTkFont(size=11), text_color="#AAAAAA").pack(anchor="w")
+        var_type = ctk.StringVar(value="% Phần trăm")
+        ctk.CTkOptionMenu(col2, variable=var_type, values=["% Phần trăm", "VNĐ Tiền mặt"], width=120, fg_color="#333333").pack()
+        
+        col3 = ctk.CTkFrame(row1, fg_color="transparent")
+        col3.pack(side="left", padx=5)
+        ctk.CTkLabel(col3, text="Giá trị", font=ctk.CTkFont(size=11), text_color="#AAAAAA").pack(anchor="w")
+        var_value = ctk.StringVar()
+        ctk.CTkEntry(col3, textvariable=var_value, width=100).pack()
+
+        row2 = ctk.CTkFrame(form_frame, fg_color="transparent")
+        row2.pack(fill="x", padx=10, pady=(5, 10))
+        
+        # --- SỬ DỤNG TKCALENDAR ĐỂ CHỌN NGÀY ---
+        col4 = ctk.CTkFrame(row2, fg_color="transparent")
+        col4.pack(side="left", padx=5)
+        ctk.CTkLabel(col4, text="Ngày bắt đầu", font=ctk.CTkFont(size=11), text_color="#AAAAAA").pack(anchor="w")
+        
+        # DatePicker Bắt đầu
+        cal_start = DateEntry(col4, width=15, background='#E67E22', foreground='white', borderwidth=0, date_pattern='yyyy-mm-dd', font=('Arial', 11))
+        cal_start.pack(pady=(2,0))
+
+        col5 = ctk.CTkFrame(row2, fg_color="transparent")
+        col5.pack(side="left", padx=15)
+        ctk.CTkLabel(col5, text="Ngày kết thúc", font=ctk.CTkFont(size=11), text_color="#AAAAAA").pack(anchor="w")
+        
+        # DatePicker Kết thúc
+        cal_end = DateEntry(col5, width=15, background='#E67E22', foreground='white', borderwidth=0, date_pattern='yyyy-mm-dd', font=('Arial', 11))
+        cal_end.pack(pady=(2,0))
+
+        # --- DƯỚI: BẢNG DANH SÁCH MÃ ---
+        table_frame = ctk.CTkFrame(popup, fg_color="#212121", corner_radius=8)
+        table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
+
+        import tkinter.ttk as ttk
+        style = ttk.Style()
+        style.configure("Discount.Treeview", background="#2B2B2B", foreground="white", rowheight=30, fieldbackground="#2B2B2B", borderwidth=0)
+        style.configure("Discount.Treeview.Heading", background="#333333", foreground="white", font=('Arial', 10, 'bold'))
+
+        tree = ttk.Treeview(table_frame, columns=("id", "code", "type", "value", "start", "end"), show="headings", style="Discount.Treeview")
+        tree.heading("id", text="ID"); tree.column("id", width=30, anchor="center")
+        tree.heading("code", text="Mã Code"); tree.column("code", width=100)
+        tree.heading("type", text="Loại"); tree.column("type", width=80, anchor="center")
+        tree.heading("value", text="Giá Trị"); tree.column("value", width=80, anchor="e")
+        tree.heading("start", text="Bắt đầu"); tree.column("start", width=130, anchor="center")
+        tree.heading("end", text="Kết thúc"); tree.column("end", width=130, anchor="center")
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+        import sqlite3
+        from src.config import DB_PATH
+
+        def load_discounts():
+            for i in tree.get_children(): tree.delete(i)
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("SELECT id, ma_code, loai_giam, gia_tri, ngay_bat_dau, ngay_ket_thuc FROM ma_giam_gia ORDER BY id DESC")
+                for r in cursor.fetchall():
+                    val_str = f"{r[3]} %" if r[2] == 'phan_tram' else f"{r[3]:,.0f} đ".replace(",", ".")
+                    tree.insert("", "end", values=(r[0], r[1], "Phần trăm" if r[2]=='phan_tram' else "Tiền mặt", val_str, r[4], r[5]))
+            except: pass
+            finally:
+                if 'conn' in locals(): conn.close()
+
+        def add_discount():
+            code = var_code.get().strip().upper()
+            val = var_value.get().strip()
+            
+            if not code or not val: return messagebox.showwarning("Lỗi", "Vui lòng nhập đủ Mã Code và Giá trị!", parent=popup)
+            try:
+                val = int(val)
+                type_db = 'phan_tram' if "Phần" in var_type.get() else 'tien_mat'
+                
+                # Tự động chèn giờ bắt đầu là 00:00:00 và giờ kết thúc là 23:59:59
+                start_datetime = f"{cal_start.get()} 00:00:00"
+                end_datetime = f"{cal_end.get()} 23:59:59"
+
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("INSERT INTO ma_giam_gia (ma_code, loai_giam, gia_tri, ngay_bat_dau, ngay_ket_thuc) VALUES (?, ?, ?, ?, ?)", 
+                               (code, type_db, val, start_datetime, end_datetime))
+                conn.commit()
+                
+                var_code.set(""); var_value.set("")
+                load_discounts()
+            except sqlite3.IntegrityError:
+                messagebox.showerror("Lỗi", "Mã này đã tồn tại trong hệ thống!", parent=popup)
+            except Exception as e:
+                messagebox.showerror("Lỗi", f"Có lỗi xảy ra: {e}", parent=popup)
+            finally:
+                if 'conn' in locals(): conn.close()
+
+        def del_discount():
+            sel = tree.selection()
+            if not sel: return messagebox.showwarning("Lỗi", "Vui lòng chọn 1 mã ở bảng bên dưới để xóa", parent=popup)
+            if messagebox.askyesno("Xóa", "Bạn có chắc chắn muốn xóa mã giảm giá này?", parent=popup):
+                try:
+                    conn = sqlite3.connect(DB_PATH)
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM ma_giam_gia WHERE id=?", (tree.item(sel[0], "values")[0],))
+                    conn.commit()
+                    load_discounts()
+                finally:
+                    if 'conn' in locals(): conn.close()
+
+        ctk.CTkButton(row1, text="Thêm Mã Khuyến Mãi", font=ctk.CTkFont(weight="bold"), fg_color="#2ECC71", hover_color="#27AE60", command=add_discount).pack(side="left", padx=15, pady=(15,0))
+        ctk.CTkButton(table_frame, text="🗑️ Xóa Mã Đang Chọn", fg_color="transparent", border_width=1, border_color="#E74C3C", text_color="#E74C3C", command=del_discount).pack(pady=(0, 10))
+
+        load_discounts()

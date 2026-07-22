@@ -148,10 +148,13 @@ class OrderModel:
         conn.close()
         return row[0] if row else None
 
-    def close_order(self, order_id, tien_khach_dua):
-        total = self.calculate_order_total(order_id)
-        if tien_khach_dua < total: return total, None
-        tien_thua = int(tien_khach_dua - total)
+    def close_order(self, order_id, tien_khach_dua, tien_giam_gia=0, ma_giam_gia=None):
+        total_goc = self.calculate_order_total(order_id)
+        final_total = total_goc - tien_giam_gia # Trừ tiền giảm giá để ra tổng cuối
+
+        # So sánh tiền khách đưa với tổng cuối (thay vì tổng gốc)
+        if tien_khach_dua < final_total: return final_total, None
+        tien_thua = int(tien_khach_dua - final_total)
 
         conn = self._connect()
         cursor = conn.cursor()
@@ -165,13 +168,26 @@ class OrderModel:
         if recipe_items:
             self.stock_model.deduct_ingredients(recipe_items)
 
-        cursor.execute("UPDATE don_hang SET tong_tien = ?, tien_khach_dua = ?, tien_thua = ?, trang_thai = 'Đã Thanh Toán', thoi_gian_thanh_toan = CURRENT_TIMESTAMP WHERE id = ?", (total, tien_khach_dua, tien_thua, order_id))
+        # Cập nhật thông tin thanh toán (Giữ ngày cũ nếu có)
+        cursor.execute("""
+            UPDATE don_hang 
+            SET tong_tien = ?, 
+                tien_giam_gia = ?,
+                ma_giam_gia_ap_dung = ?,
+                tien_khach_dua = ?, 
+                tien_thua = ?, 
+                trang_thai = 'Đã Thanh Toán', 
+                thoi_gian_thanh_toan = COALESCE(thoi_gian_thanh_toan, CURRENT_TIMESTAMP)
+            WHERE id = ?
+        """, (final_total, tien_giam_gia, ma_giam_gia, tien_khach_dua, tien_thua, order_id))
+        
         conn.commit()
         conn.close()
 
         if ban_id is not None:
             self.table_model.set_table_status(ban_id, "Trống")
-        return total, tien_thua
+            
+        return final_total, tien_thua
 
     def move_order(self, order_id, source_table_id, target_table_id):
         if source_table_id == target_table_id: return False
@@ -332,3 +348,138 @@ class OrderModel:
         """, (ten_quan, dia_chi, dien_thoai, loi_cam_on))
         conn.commit()
         conn.close()
+    
+   # ==========================================
+    # TÍNH NĂNG 2: LỊCH SỬ HÓA ĐƠN & KẾ TOÁN (ĐÃ FIX MÚI GIỜ)
+    # ==========================================
+    def get_history_orders(self, start_date, end_date):
+        conn = self._connect()
+        cursor = conn.cursor()
+        # Dùng localtime để chuyển giờ UTC sang giờ Việt Nam
+        query = """
+            SELECT id, ma_don, loai_don, tong_tien, trang_thai, datetime(thoi_gian_thanh_toan, 'localtime') as local_time
+            FROM don_hang
+            WHERE datetime(thoi_gian_thanh_toan, 'localtime') >= ? 
+              AND datetime(thoi_gian_thanh_toan, 'localtime') <= ?
+              AND trang_thai IN ('Đã Thanh Toán', 'Đã Hủy')
+            ORDER BY local_time DESC
+        """
+        cursor.execute(query, (f"{start_date} 00:00:00", f"{end_date} 23:59:59"))
+        rows = cursor.fetchall()
+        conn.close()
+        return rows
+
+    def get_order_summary(self, order_id):
+        conn = self._connect()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        # Lấy thêm trường local_time
+        cursor.execute("SELECT *, datetime(thoi_gian_thanh_toan, 'localtime') as local_time FROM don_hang WHERE id=?", (order_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def void_paid_order(self, order_id):
+        """Hủy hóa đơn đã thanh toán: Trả lại kho và Xóa doanh thu"""
+        conn = self._connect()
+        cursor = conn.cursor()
+        
+        # [BẢO MẬT KẾ TOÁN]: Chỉ cho phép hoàn kho nếu đơn đang thực sự ở trạng thái 'Đã Thanh Toán'
+        # Tránh trường hợp user click đúp hoặc lỗi mạng gọi hàm 2 lần làm kho tăng gấp đôi
+        cursor.execute("SELECT trang_thai FROM don_hang WHERE id=?", (order_id,))
+        row = cursor.fetchone()
+        if not row or row[0] != 'Đã Thanh Toán':
+            conn.close()
+            return False
+            
+        # 1. Lấy chi tiết món để hoàn kho
+        cursor.execute("SELECT do_uong_id, so_luong, cong_thuc_tuy_chinh FROM chi_tiet_don_hang WHERE don_hang_id=?", (order_id,))
+        items = cursor.fetchall()
+        
+        for item in items:
+            do_uong_id, so_luong, custom_recipe = item
+            recipe_to_restore = {}
+            
+            if custom_recipe:
+                try: recipe_to_restore = json.loads(custom_recipe)
+                except: pass
+            
+            if not recipe_to_restore:
+                cursor.execute("SELECT nguyen_lieu_id, so_luong_tru FROM cong_thuc WHERE do_uong_id=?", (do_uong_id,))
+                for nl_id, qty in cursor.fetchall():
+                    recipe_to_restore[str(nl_id)] = qty
+            
+            # [FIX LỖI KHO]: CHỈ cộng trả lại nguyên liệu cho TỒN LÝ THUYẾT.
+            # TUYỆT ĐỐI KHÔNG đụng vào Tồn Thực Tế.
+            for nl_id, qty_per_drink in recipe_to_restore.items():
+                total_to_add = float(qty_per_drink) * so_luong
+                cursor.execute("""
+                    UPDATE kho_nguyen_lieu 
+                    SET ton_ly_thuyet = ton_ly_thuyet + ? 
+                    WHERE id = ?
+                """, (total_to_add, int(nl_id)))
+        
+        # 2. Cập nhật trạng thái đơn thành 'Đã Hủy'
+        cursor.execute("UPDATE don_hang SET trang_thai='Đã Hủy' WHERE id=?", (order_id,))
+        conn.commit()
+        conn.close()
+        return True
+
+    def reopen_order(self, order_id):
+        conn = self._connect()
+        cursor = conn.cursor()
+        
+        # [BẢO MẬT KẾ TOÁN]: Tương tự, chỉ mở lại nếu đơn đang Đã Thanh Toán
+        cursor.execute("SELECT trang_thai FROM don_hang WHERE id=?", (order_id,))
+        row = cursor.fetchone()
+        if not row or row[0] != 'Đã Thanh Toán':
+            conn.close()
+            return False
+            
+        # 1. Tự động hoàn lại nguyên liệu vào kho
+        cursor.execute("SELECT do_uong_id, so_luong, cong_thuc_tuy_chinh FROM chi_tiet_don_hang WHERE don_hang_id=?", (order_id,))
+        items = cursor.fetchall()
+        
+        for item in items:
+            do_uong_id, so_luong, custom_recipe = item
+            recipe_to_restore = {}
+            if custom_recipe:
+                try: recipe_to_restore = json.loads(custom_recipe)
+                except: pass
+            if not recipe_to_restore:
+                cursor.execute("SELECT nguyen_lieu_id, so_luong_tru FROM cong_thuc WHERE do_uong_id=?", (do_uong_id,))
+                for nl_id, qty in cursor.fetchall(): recipe_to_restore[str(nl_id)] = qty
+                
+           # [FIX LỖI KHO]: CHỈ cộng trả lại nguyên liệu cho TỒN LÝ THUYẾT.
+            # TUYỆT ĐỐI KHÔNG đụng vào Tồn Thực Tế.
+            for nl_id, qty_per_drink in recipe_to_restore.items():
+                total_to_add = float(qty_per_drink) * so_luong
+                cursor.execute("""
+                    UPDATE kho_nguyen_lieu 
+                    SET ton_ly_thuyet = ton_ly_thuyet + ? 
+                    WHERE id = ?
+                """, (total_to_add, int(nl_id)))
+        
+        # 2. Kiểm tra thông minh: Tránh kẹt Bàn
+        cursor.execute("SELECT ban_id FROM don_hang WHERE id=?", (order_id,))
+        ban_row = cursor.fetchone()
+        ban_id = ban_row[0] if ban_row else None
+        
+        if ban_id:
+            cursor.execute("SELECT trang_thai FROM ban WHERE id=?", (ban_id,))
+            trang_thai_ban = cursor.fetchone()[0]
+            if trang_thai_ban == 'Có khách':
+                cursor.execute("UPDATE don_hang SET ban_id=NULL, loai_don='Mang về' WHERE id=?", (order_id,))
+            else:
+                cursor.execute("UPDATE ban SET trang_thai='Có khách' WHERE id=?", (ban_id,))
+
+        # 3. Đưa đơn về trạng thái Mở
+        cursor.execute("""
+            UPDATE don_hang 
+            SET trang_thai='Mở', tien_khach_dua=0, tien_thua=0, tien_giam_gia=0, ma_giam_gia_ap_dung=NULL
+            WHERE id=?
+        """, (order_id,))
+        
+        conn.commit()
+        conn.close()
+        return True
