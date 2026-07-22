@@ -4,7 +4,9 @@ Phần mềm quản lý quán cà phê chạy **ngoại tuyến** (Desktop App),
 
 ## 🎬 Demo
 
-Video quay lướt qua các trang và tính năng chính: [`docs/Video Demo.mp4`](./docs/Video%20Demo.mp4)
+Video quay lướt qua các trang và tính năng chính:
+
+https://github.com/user-attachments/assets/0934267f-d4b7-4553-965b-36a87f11ce66
 
 ## 🚀 Tính Năng Chính
 
